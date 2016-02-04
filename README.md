@@ -13,18 +13,20 @@ cocoapods-check displays the differences between locked and installed Pods. It c
 `pod check` will display a list of Pods that will be installed by running `pod install`:
 
     $ pod check
-    ~SquareData, +SquareItems, ΔSquareTables
+    ~SquareData, +SquareItems, ~SquareTables
     [!] `pod install` will install 3 Pods.
 
-The symbol before each Pod name indicates the status of the Pod. A `~` indicates a version of a Pod exists locally, but the version specified in `Podfile.lock` is different. A `+` indicates no version of the Pod exists locally, while a `Δ` indicates the Pod is a development Pod. Development pods are always assumed to be 'dirty'. Pods that don't require an update will not be listed.
+The symbol before each Pod name indicates the status of the Pod. A `~` indicates a version of a Pod exists locally, but the version specified in `Podfile.lock` is different. A `+` indicates no version of the Pod exists locally. Pods that don't require an update will not be listed. For development pods the modified time of the Pod's files are checked against the modified time of the lockfile to determine whether the Pod needs installation.
 
 Verbose mode shows a bit more detail:
 
     $ pod check --verbose
     SquareData 1.2.1 -> 1.2.2
     SquareItems newly added
-    SquareTables {:path=>"/Users/doo/Code/SquareTables"}
+    SquareTables (SquareTables/SomeSource.m)
     [!] `pod install` will install 3 Pods.
+
+For development Pods verbose mode shows the files that are newer than the lockfile in parentheses.
 
 If no Pods are out of date, then the output looks like:
 
