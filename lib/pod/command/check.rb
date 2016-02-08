@@ -11,10 +11,8 @@ module Pod
       self.description = <<-DESC
           Compares the Pod lockfile with the manifest lockfile and shows
           any differences. In non-verbose mode, '~' indicates an existing Pod
-          will be updated to the version specified in Podfile.lock, '+'
-          indicates a missing Pod will be installed, and 'Δ' indicates a Pod
-          is a development Pod. Development Pods are always considered
-          to need installation.
+          will be updated to the version specified in Podfile.lock and '+'
+          indicates a missing Pod will be installed.
       DESC
 
       self.arguments = []
@@ -62,13 +60,16 @@ module Pod
             manifest_version = nil
           end
 
-          # If this is a development Pod
-          if development_pods[spec_name] != nil
-            development_result(spec_name, development_pods[spec_name])
-
           # If this Pod is installed
-          elsif manifest_version
-            if locked_version != manifest_version
+          if manifest_version
+            # If this is a development pod do a modified time check
+            if development_pods[spec_name] != nil
+              newer_files = get_files_newer_than_lockfile_for_podspec(config, development_pods[spec_name])
+              if newer_files.any?
+                changed_development_result(spec_name, newer_files)
+              end
+            # Otherwise just compare versions
+            elsif locked_version != manifest_version
               changed_result(spec_name, manifest_version, locked_version)
             end
 
@@ -79,17 +80,71 @@ module Pod
         end.compact
       end
 
-      def development_result(spec_name, external_source)
-        if @check_command_verbose
-          "#{spec_name} #{external_source}"
+      def get_files_newer_than_lockfile_for_podspec(config, development_pod)
+        files_for_podspec = get_files_for_podspec(development_pod[:path])
+
+        lockfile_mtime = File.mtime(config.lockfile.defined_in_file)
+        podspec_file = get_podspec_for_file_or_path(development_pod[:path])
+        podspec_dir = Pathname.new(File.dirname(podspec_file))
+        files_for_podspec
+            .select {|f| File.mtime(f) >= lockfile_mtime}
+            .map {|f| Pathname.new(f).relative_path_from(podspec_dir).to_s}
+      end
+
+      # Returns an array of all files pointed to by the podspec
+      def get_files_for_podspec(podspec_file)
+        podspec_file = get_podspec_for_file_or_path(podspec_file)
+
+        development_pod_dir = File.dirname(podspec_file)
+        spec = Specification.from_file(podspec_file)
+
+        # Gather all the dependencies used by the spec, across all platforms, and including subspecs.
+        all_files = [spec, spec.subspecs].flatten.map { |a_spec|
+          a_spec.available_platforms.map { |platform|
+            accessor = Sandbox::FileAccessor.new(Sandbox::PathList.new(Pathname.new(development_pod_dir)), a_spec.consumer(platform))
+            [
+                accessor.vendored_frameworks,
+                accessor.vendored_libraries,
+                accessor.resource_bundle_files,
+                accessor.license,
+                accessor.prefix_header,
+                accessor.preserve_paths,
+                accessor.readme,
+                accessor.resources,
+                accessor.source_files
+            ].compact
+          }
+        }.flatten
+
+        # Include the podspec files as well
+        all_files.push(podspec_file)
+      end
+
+      def get_podspec_for_file_or_path(podspec_file_or_path)
+        if File.basename(podspec_file_or_path).include?('.podspec')
+          podspec_file_or_path
         else
-          "Δ#{spec_name}"
+          glob_pattern = podspec_file_or_path + '/*.podspec{,.json}'
+          Pathname.glob(glob_pattern).first
         end
       end
 
       def changed_result(spec_name, manifest_version, locked_version)
         if @check_command_verbose
           "#{spec_name} #{manifest_version} -> #{locked_version}"
+        else
+          "~#{spec_name}"
+        end
+      end
+
+      def changed_development_result(spec_name, newer_files)
+        if @check_command_verbose
+           number_files_not_shown = newer_files.length - 2
+           newer_files = newer_files[0..1]
+           if number_files_not_shown > 0
+             newer_files.push("and #{number_files_not_shown} other#{'s' if number_files_not_shown > 1}")
+           end
+          "#{spec_name} (#{newer_files.join(', ')})"
         else
           "~#{spec_name}"
         end

@@ -1,4 +1,6 @@
 require 'cocoapods'
+require 'tempfile'
+
 require_relative '../lib/pod/command/check'
 
 describe Pod::Command::Check do
@@ -59,26 +61,62 @@ describe Pod::Command::Check do
     expect(results).to eq([ 'pod_three newly added', 'pod_two 2.0 -> 3.0' ])
   end
 
-  it 'handles development pods' do
+  it 'handles development pods with changes' do
     check = Pod::Command::Check.new(CLAide::ARGV.new([]))
 
-    config = create_config({ :pod_one => '1.0', :pod_two => nil }, { :pod_one => '1.0', :pod_two => nil })
+    config = create_config({ :pod_one => '1.0', :pod_two => '1.0' }, { :pod_one => '1.0', :pod_two => '1.0' })
 
-    development_pods = { :pod_two => 'source' }
-    results = check.find_differences(config, development_pods)
+    # Make an actual lockfile file because 'check' needs the modified time
+    lockfile_path = Tempfile.new('dev-pod-test-lockfile').path
+    allow(config.lockfile).to receive(:defined_in_file).and_return(lockfile_path)
 
-    expect(results).to eq([ 'Δpod_two' ])
+    # Ensure development pod modified time is after lockfile modified time
+    sleep(1)
+
+    # Create a temp dir with a temp file and run the check in that context
+    Dir.mktmpdir('dev-pod-test-dir') do |dir|
+
+      # Create a source file
+      source_file = Tempfile.new('some-pod-file', dir)
+
+      # Write a podspec file pointing at the source file
+      File.write("#{dir}/foo.podspec", "Pod::Spec.new do |s| s.source_files = '#{File.basename(source_file)}' end")
+
+      # Do the check
+      development_pods = { :pod_two => { :path => "#{dir}/foo.podspec" } }
+      results = check.find_differences(config, development_pods)
+
+      expect(results).to eq([ '~pod_two' ])
+    end
   end
 
-  it 'handles development pods with verbosity' do
-    check = Pod::Command::Check.new(CLAide::ARGV.new([ '--verbose' ]))
+  it 'handles development pods no changes reported' do
+    check = Pod::Command::Check.new(CLAide::ARGV.new([]))
 
-    config = create_config({ :pod_one => '1.0', :pod_two => nil }, { :pod_one => '1.0', :pod_two => nil })
+    config = create_config({ :pod_one => '1.0', :pod_two => '1.0' }, { :pod_one => '1.0', :pod_two => '1.0' })
 
-    development_pods = { :pod_two => 'source' }
-    results = check.find_differences(config, development_pods)
+    # Create a temp dir with a temp file and run the check in that context
+    Dir.mktmpdir('dev-pod-test-dir') do |dir|
 
-    expect(results).to eq([ 'pod_two source' ])
+      # Create a source file
+      Tempfile.new('some-pod-file', dir)
+
+      # Write a podspec file pointing at the source file
+      File.write("#{dir}/foo.podspec", "Pod::Spec.new do |s| s.source_files = 'ack' end")
+
+      # Ensure lockfile modified time is after development pod modified time
+      sleep(1)
+
+      # Make an actual lockfile file because 'check' needs the modified time
+      lockfile_path = Tempfile.new('dev-pod-test-lockfile').path
+      allow(config.lockfile).to receive(:defined_in_file).and_return(lockfile_path)
+
+      # Do the check
+      development_pods = { :pod_two => { :path => "#{dir}/foo.podspec" } }
+      results = check.find_differences(config, development_pods)
+
+      expect(results).to eq([])
+    end
   end
 
   def create_config(lockfile_hash, manifest_hash)
