@@ -41,7 +41,7 @@ module Pod
       def find_development_pods(podfile)
         development_pods = {}
         podfile.dependencies.each do |dependency|
-          development_pods[dependency.name] = dependency.external_source if dependency.external?
+          development_pods[dependency.name] = dependency.external_source if dependency.local?
         end
         development_pods
       end
