@@ -41,7 +41,10 @@ module Pod
       def find_development_pods(podfile)
         development_pods = {}
         podfile.dependencies.each do |dependency|
-          development_pods[dependency.name] = dependency.external_source if dependency.local?
+          if dependency.local?
+            development_pods[dependency.name] = dependency.external_source.clone
+            development_pods[dependency.name][:path] = File.absolute_path(development_pods[dependency.name][:path])
+          end
         end
         development_pods
       end
