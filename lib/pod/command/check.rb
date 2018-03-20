@@ -35,7 +35,18 @@ module Pod
 
         development_pods = find_development_pods(config.podfile)
         results = find_differences(config, development_pods)
-        print_results(results)
+        has_same_manifests = check_manifests(config)
+        print_results(results, has_same_manifests)
+      end
+
+      def check_manifests(config)
+        # Bail if the first time
+        return true unless config.sandbox.manifest
+
+        root_lockfile = config.lockfile.defined_in_file
+        pods_manifest = config.sandbox.manifest_path
+
+        File.read(root_lockfile) == File.read(pods_manifest)
       end
 
       def find_development_pods(podfile)
@@ -161,8 +172,12 @@ module Pod
         end
       end
 
-      def print_results(results)
-        return UI.puts "The Podfile's dependencies are satisfied" if results.empty?
+      def print_results(results, same_manifests)
+        return UI.puts "The Podfile's dependencies are satisfied" if results.empty? && same_manifests
+
+        unless same_manifests
+          raise Informative, 'The Podfile.lock does not match the Pods/Manifest.lock.'
+        end
 
         if @check_command_verbose
           UI.puts results.join("\n")
