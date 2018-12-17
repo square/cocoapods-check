@@ -149,12 +149,32 @@ describe Pod::Command::Check do
     end
   end
 
+  it 'detects no differences between Podfile and Podfile.lock' do
+    check = Pod::Command::Check.new(CLAide::ARGV.new([]))
+    config = create_config({ :pod_one => '1.0', :pod_two => '2.0' }, { :pod_one => '1.0', :pod_two => '2.0' })
+    allow(config.lockfile).to receive(:detect_changes_with_podfile).with(config.podfile)
+                                                                   .and_return({added: [], changed: [], removed: []})
+
+    expect(check.podfile_matches_lockfile?(config)).to be_truthy
+  end
+
+  it 'detects differences between Podfile and Podfile.lock' do
+    check = Pod::Command::Check.new(CLAide::ARGV.new([]))
+    config = create_config({ :pod_one => '1.0', :pod_two => '2.0' }, { :pod_one => '1.0', :pod_two => '2.0' })
+    allow(config.lockfile).to receive(:detect_changes_with_podfile).with(config.podfile)
+                                                                   .and_return({added: [:pod_one], changed: [], removed: []})
+
+    expect(check.podfile_matches_lockfile?(config)).to be_falsey
+  end
+
   def create_config(lockfile_hash, manifest_hash)
     config = Pod::Config.new
+    podfile = double('podfile')
     lockfile = double('lockfile')
     sandbox = double('sandbox')
     manifest = double('manifest')
 
+    allow(config).to receive(:podfile).and_return(podfile)
     allow(config).to receive(:lockfile).and_return(lockfile)
     allow(config).to receive(:sandbox).and_return(sandbox)
     allow(sandbox).to receive(:manifest).and_return(manifest)

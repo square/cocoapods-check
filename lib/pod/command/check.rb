@@ -35,10 +35,19 @@ module Pod
           raise Informative, 'Missing Podfile.lock!'
         end
 
+        unless podfile_matches_lockfile?(config)
+          raise Informative, 'Podfile does not match Podfile.lock!'
+        end
+
         development_pods = find_development_pods(config.podfile)
         results = find_differences(config, development_pods)
         has_same_manifests = check_manifests(config)
         print_results(results, has_same_manifests)
+      end
+
+      def podfile_matches_lockfile?(config)
+        podfile_changes = config.lockfile.detect_changes_with_podfile(config.podfile)
+        podfile_changes[:added].empty? && podfile_changes[:changed].empty? && podfile_changes[:removed].empty?
       end
 
       def check_manifests(config)
