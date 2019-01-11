@@ -119,6 +119,36 @@ describe Pod::Command::Check do
     end
   end
 
+
+  it 'handles ignoring development pods with changes' do
+    check = Pod::Command::Check.new(CLAide::ARGV.new([ '--ignore-dev-pods' ]))
+
+    config = create_config({ :pod_one => '1.0', :pod_two => '1.0' }, { :pod_one => '1.0', :pod_two => '1.0' })
+
+    # Make an actual lockfile file because 'check' needs the modified time
+    lockfile_path = Tempfile.new('dev-pod-test-lockfile').path
+    allow(config.lockfile).to receive(:defined_in_file).and_return(lockfile_path)
+
+    # Ensure development pod modified time is after lockfile modified time
+    sleep(1)
+
+    # Create a temp dir with a temp file and run the check in that context
+    Dir.mktmpdir('dev-pod-test-dir') do |dir|
+
+      # Create a source file
+      source_file = Tempfile.new('some-pod-file', dir)
+
+      # Write a podspec file pointing at the source file
+      File.write("#{dir}/foo.podspec", "Pod::Spec.new do |s| s.source_files = '#{File.basename(source_file)}' end")
+
+      # Do the check
+      development_pods = { :pod_two => { :path => "#{dir}/foo.podspec" } }
+      results = check.find_differences(config, development_pods)
+
+      expect(results).to eq([])
+    end
+  end
+
   def create_config(lockfile_hash, manifest_hash)
     config = Pod::Config.new
     lockfile = double('lockfile')
