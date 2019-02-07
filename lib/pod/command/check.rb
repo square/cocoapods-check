@@ -19,12 +19,14 @@ module Pod
 
       def self.options
         [
-          ['--verbose', 'Show change details.']
+          ['--verbose', 'Show change details.'],
+          ['--ignore-dev-pods', 'Ignores updates to development pods.']
         ].concat(super)
       end
 
       def initialize(argv)
         @check_command_verbose = argv.flag?('verbose')
+        @check_command_ignore_dev_pods = argv.flag?('ignore-dev-pods')
         super
       end
 
@@ -78,6 +80,7 @@ module Pod
           if manifest_version
             # If this is a development pod do a modified time check
             if development_pods[spec_name] != nil
+              next if @check_command_ignore_dev_pods
               newer_files = get_files_newer_than_lockfile_for_podspec(config, development_pods[spec_name])
               if newer_files.any?
                 changed_development_result(spec_name, newer_files)
