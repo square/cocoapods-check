@@ -32,6 +32,8 @@ If no Pods are out of date, then the output looks like:
 
     $ pod check
     The Podfile's dependencies are satisfied
+    
+You can also pass the `--ignore-dev-pods` option to not check the status of development pods.
 
 ## Exit Code
 
